@@ -333,22 +333,20 @@ fn prepare_target(
     tile_size: &Size,
 ) -> Result<RgbImage, Box<dyn Error>> {
     let target = ImageReader::open(image_path)?.decode()?.into_rgb8();
-    let width = target.width();
-    let height = target.height();
-    let target = target
-        .view(
-            0,
-            0,
-            width - width % tile_size.width,
-            height - height % tile_size.height,
-        )
-        .to_image();
-    Ok(resize(
+    let target = resize(
         &target,
         target.width() * scale,
         target.height() * scale,
         Nearest,
-    ))
+    );
+    Ok(target
+        .view(
+            0,
+            0,
+            target.width() - target.width() % tile_size.width,
+            target.height() - target.height() % tile_size.height,
+        )
+        .to_image())
 }
 
 pub fn compute_mosaic(args: Options) {

@@ -39,5 +39,6 @@ jobs:
       # Step 4 : Run tests
       - name: Run tests
         run: |
-          docker run --rm \
-            moseiik-test:${{ matrix.platform }}
+          docker run \
+            --platform ${{ matrix.platform }} \
+            moseiik-test:latest

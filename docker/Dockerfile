@@ -23,7 +23,7 @@ WORKDIR /app
 RUN git clone https://github.com/PapyPouley/moseiik.git .
 
 # Move to docker branch (only for dockerfile testing)
-RUN git checkout Dockerfile
+#RUN git checkout UnitTest
 
 # Build and run unit tests
 ENTRYPOINT [ "cargo", "test", "--release", "--" ]

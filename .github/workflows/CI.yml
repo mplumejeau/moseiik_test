@@ -22,11 +22,11 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      # Step 2 : Install QEMU
-      #- name: Install QEMU (for cross-platform emulation)
-      #  uses: docker/setup-qemu-action@v3
-      #  with:
-      #    platforms: all
+       Step 2 : Install QEMU
+      - name: Install QEMU (for cross-platform emulation)
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: all
 
       # Step 3 : Build Docker image
       - name: Build Docker image

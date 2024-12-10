@@ -33,8 +33,8 @@ jobs:
         run: |
           docker buildx build \
             --platform ${{ matrix.platform }} \
-            -t moseiik-test:${{ matrix.platform }} \
-            --load .
+            -t moseiik-test:latest \
+            -f docker/Dockerfile --load .
 
       # Step 4 : Run tests
       - name: Run tests

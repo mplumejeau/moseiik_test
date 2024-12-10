@@ -440,22 +440,414 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    fn unit_test_x86() {
-        // TODO
-        assert!(true);
+    fn unit_test_l1_x86_sse2_identical_images() {
+        // Crée deux images identiques (10x10 pixels)
+        let mut im1 = RgbImage::new(10, 10);
+        for pixel in im1.pixels_mut() {
+            *pixel = image::Rgb([100, 150, 200]); // Remplit avec une valeur fixe
+        }
+        let im2 = im1.clone();
+
+        // L1 norm entre des images identiques devrait être 0
+        let result = unsafe { l1_x86_sse2(&im1, &im2) };
+        assert_eq!(
+            result, 0,
+            "Test failed for identical images with l1_x86_sse2."
+        );
+    }
+
+    #[test]
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    fn unit_test_l1_x86_sse2_different_images() {
+        // Crée deux images différentes (10x10 pixels)
+        let mut im1 = RgbImage::new(10, 10);
+        let mut im2 = RgbImage::new(10, 10);
+
+        let im1_c: [u8; 3] = [100, 150, 200];
+        let im2_c: [u8; 3] = [50, 100, 150];
+
+        for pixel in im1.pixels_mut() {
+            *pixel = image::Rgb(im1_c);
+        }
+        for pixel in im2.pixels_mut() {
+            *pixel = image::Rgb(im2_c);
+        }
+
+        // Calcul manuel de la différence
+        let expected_diff =
+            ((im1_c[0] as i32 - im2_c[0] as i32).abs() * im1.width() as i32 * im1.height() as i32)
+                + ((im1_c[1] as i32 - im2_c[1] as i32).abs()
+                    * im1.width() as i32
+                    * im1.height() as i32)
+                + ((im1_c[2] as i32 - im2_c[2] as i32).abs()
+                    * im1.width() as i32
+                    * im1.height() as i32);
+
+        let result = unsafe { l1_x86_sse2(&im1, &im2) };
+        assert_eq!(
+            result, expected_diff,
+            "Test failed for different images with l1_x86_sse2."
+        );
+    }
+
+    #[test]
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    fn unit_test_l1_x86_sse2_partial_difference() {
+        // Crée deux images similaires mais avec quelques différences
+        let im1 = RgbImage::new(10, 10);
+        let mut im2 = im1.clone();
+
+        // Modifie quelques pixels dans im2
+        im2.put_pixel(0, 0, image::Rgb([255, 255, 255]));
+        im2.put_pixel(1, 1, image::Rgb([0, 0, 0]));
+
+        // Calcul manuel des différences
+        let mut expected_diff = 0;
+        expected_diff += (im2.get_pixel(0, 0)[0] as i32 - im1.get_pixel(0, 0)[0] as i32).abs()
+            + (im2.get_pixel(0, 0)[1] as i32 - im1.get_pixel(0, 0)[1] as i32).abs()
+            + (im2.get_pixel(0, 0)[2] as i32 - im1.get_pixel(0, 0)[2] as i32).abs();
+
+        expected_diff += (im2.get_pixel(1, 1)[0] as i32 - im1.get_pixel(1, 1)[0] as i32).abs()
+            + (im2.get_pixel(1, 1)[1] as i32 - im1.get_pixel(1, 1)[1] as i32).abs()
+            + (im2.get_pixel(1, 1)[2] as i32 - im1.get_pixel(1, 1)[2] as i32).abs();
+
+        // L1 norm
+        let result = unsafe { l1_x86_sse2(&im1, &im2) };
+        assert_eq!(
+            result, expected_diff,
+            "Test failed for partially different images with l1_x86_sse2."
+        );
     }
 
     #[test]
     #[cfg(target_arch = "aarch64")]
-    fn unit_test_aarch64() {
-        assert!(true);
+    fn unit_test_l1_neon_identical_images() {
+        // Crée deux images identiques (10x10 pixels)
+        let mut im1 = RgbImage::new(10, 10);
+        for pixel in im1.pixels_mut() {
+            *pixel = image::Rgb([100, 150, 200]); // Remplit avec une valeur fixe
+        }
+        let im2 = im1.clone();
+
+        // L1 norm entre des images identiques devrait être 0
+        let result = unsafe { l1_neon(&im1, &im2) };
+        assert_eq!(result, 0);
     }
 
     #[test]
-    fn unit_test_generic() {
-        // TODO
-        assert!(true);
+    #[cfg(target_arch = "aarch64")]
+    fn unit_test_l1_neon_different_images() {
+        // Crée deux images différentes (10x10 pixels)
+        let mut im1 = RgbImage::new(10, 10);
+        let mut im2 = RgbImage::new(10, 10);
+
+        let im1_c: [u8; 3] = [100, 150, 200];
+        let im2_c: [u8; 3] = [50, 100, 150];
+
+        for pixel in im1.pixels_mut() {
+            *pixel = image::Rgb(im1_c);
+        }
+        for pixel in im2.pixels_mut() {
+            *pixel = image::Rgb(im2_c);
+        }
+
+        // calcule de la différence
+        let expected_diff =
+            ((im1_c[0] as i32 - im2_c[0] as i32).abs() * im1.width() as i32 * im1.height() as i32)
+                + ((im1_c[1] as i32 - im2_c[1] as i32).abs()
+                    * im1.width() as i32
+                    * im1.height() as i32)
+                + ((im1_c[2] as i32 - im2_c[2] as i32).abs()
+                    * im1.width() as i32
+                    * im1.height() as i32);
+
+        let result = unsafe { l1_neon(&im1, &im2) };
+        assert_eq!(result, expected_diff);
+    }
+
+    #[test]
+    #[cfg(target_arch = "aarch64")]
+    fn unit_test_l1_neon_partial_difference() {
+        // Crée deux images similaires mais avec quelques différences
+        let im1 = RgbImage::new(10, 10);
+        let mut im2 = im1.clone();
+
+        // Change quelques pixels dans im2
+        im2.put_pixel(0, 0, image::Rgb([255, 255, 255]));
+        im2.put_pixel(1, 1, image::Rgb([0, 0, 0]));
+
+        // Calcul manuel des différences pour ces deux pixels
+        let expected_diff = (im2.get_pixel(0, 0)[0] as i32 - im1.get_pixel(0, 0)[0] as i32).abs()
+            + (im2.get_pixel(0, 0)[1] as i32 - im1.get_pixel(0, 0)[1] as i32).abs()
+            + (im2.get_pixel(0, 0)[2] as i32 - im1.get_pixel(0, 0)[2] as i32).abs();
+
+        let result = unsafe { l1_neon(&im1, &im2) };
+        assert_eq!(result, expected_diff);
+    }
+
+    #[test]
+    #[cfg(target_arch = "aarch64")]
+    fn unit_test_l1_neon_empty_images() {
+        // Crée deux images vides
+        let im1 = RgbImage::new(10, 10);
+        let im2 = RgbImage::new(10, 10);
+
+        // L1 norm entre des images vides devrait être 0
+        let result = unsafe { l1_neon(&im1, &im2) };
+        assert_eq!(result, 0);
+    }
+
+    #[test]
+    fn unit_test_l1_generic_identical_images() {
+        // Crée une image de 2x2 pixels
+        let mut im1 = RgbImage::new(2, 2);
+        
+        // Remplir les deux images avec la même couleur
+        let color = image::Rgb([100, 150, 200]);
+        for pixel in im1.pixels_mut() {
+            *pixel = color;
+        }
+
+        let mut im2 = im1.clone();
+
+
+        // La différence attendue doit être 0, car les images sont identiques
+        let expected_diff = 0;
+        let result = l1_generic(&im1, &im2);
+        assert_eq!(result, expected_diff, "Test failed for identical images.");
+    }
+
+    // Test 2: Test avec deux images totalement différentes
+    #[test]
+    fn unit_test_l1_generic_completely_different_images() {
+        // Crée une image de 2x2 pixels
+        let mut im1 = RgbImage::new(2, 2);
+        let mut im2 = RgbImage::new(2, 2);
+
+        // Remplir im1 avec une couleur
+        let color1 = image::Rgb([100, 150, 200]);
+        for pixel in im1.pixels_mut() {
+            *pixel = color1;
+        }
+
+        // Remplir im2 avec une couleur différente
+        let color2 = image::Rgb([50, 100, 150]);
+        for pixel in im2.pixels_mut() {
+            *pixel = color2;
+        }
+
+        // Calcul de la différence pour chaque pixel :
+        // Pour chaque pixel, la différence absolue est :
+        // Rouge: |100 - 50| = 50
+        // Vert: |150 - 100| = 50
+        // Bleu: |200 - 150| = 50
+        // Donc pour 4 pixels : 50 + 50 + 50 = 150 (par pixel), multiplié par 4 pixels = 600
+        let expected_diff = 600;
+        let result = l1_generic(&im1, &im2);
+        assert_eq!(
+            result, expected_diff,
+            "Test failed for completely different images."
+        );
+    }
+
+    // Test 3: Test avec des images légèrement différentes
+    #[test]
+    fn unit_test_l1_generic_slightly_different_images() {
+        // Crée une image de 2x2 pixels
+        let mut im1 = RgbImage::new(2, 2);
+    
+
+        // Remplir im1 avec une couleur
+        let color1 = image::Rgb([100, 150, 200]);
+        for pixel in im1.pixels_mut() {
+            *pixel = color1;
+        }
+
+        let color2 = image::Rgb([110, 150, 200]); // Seul le rouge change
+        let mut im2 = im1.clone();
+        im2.put_pixel(0, 0, color2);
+
+        // La différence attendue :
+        // Pour le pixel modifié :
+        // Rouge: |110 - 100| = 10
+        // Vert: |150 - 150| = 0
+        // Bleu: |200 - 200| = 0
+        // Différe|nce totale = 10 + 0 + 0 + (3 autres pixels identiques = 0) = 10
+        let expected_diff = 10;
+        let result = l1_generic(&im1, &im2);
+        assert_eq!(
+            result, expected_diff,
+            "Test failed for slightly different images."
+        );
+    }
+
+    // Test 4: Test avec des images de taille 1x1
+    #[test]
+    fn unit_test_l1_generic_single_pixel() {
+        // Crée deux images de 1x1 pixel
+        let mut im1 = RgbImage::new(1, 1);
+        let mut im2 = RgbImage::new(1, 1);
+
+        // Remplir im1 avec une couleur
+        let color1 = image::Rgb([100, 150, 200]);
+        im1.put_pixel(0, 0, color1);
+
+        // Remplir im2 avec une couleur différente
+        let color2 = image::Rgb([50, 100, 150]);
+        im2.put_pixel(0, 0, color2);
+
+        // Calcul de la différence :
+        // Rouge: |100 - 50| = 50
+        // Vert: |150 - 100| = 50
+        // Bleu: |200 - 150| = 50
+        // Différence totale = 50 + 50 + 50 = 150
+        let expected_diff = 150;
+        let result = l1_generic(&im1, &im2);
+        assert_eq!(
+            result, expected_diff,
+            "Test failed for single pixel images."
+        );
+    }
+
+    #[test]
+    fn unit_test_prepare_target() {
+        use std::path::Path;
+
+        // Fonction pour calculer les dimensions de sortie attendues
+        fn calculate_output_dimensions(
+            image_width: u32,
+            image_height: u32,
+            scaling: u32,
+            size: &Size,
+        ) -> (u32, u32) {
+            let output_image_width = image_width * scaling - (image_width * scaling) % size.width;
+            let output_image_height =
+                image_height * scaling - (image_height * scaling) % size.height;
+            (output_image_width, output_image_height)
+        }
+
+        // Liste des cas de test
+        let test_cases = vec![
+            (
+                "./assets/kit.jpeg",
+                1,
+                Size {
+                    width: 20,
+                    height: 20,
+                },
+            ),
+            (
+                "./assets/kit.jpeg",
+                3,
+                Size {
+                    width: 20,
+                    height: 20,
+                },
+            ),
+            (
+                "./assets/target-small.png",
+                1,
+                Size {
+                    width: 25,
+                    height: 25,
+                },
+            ),
+        ];
+
+        for (image_path, scaling, tile_size) in test_cases {
+            // Vérifier que le fichier existe
+            assert!(
+                Path::new(image_path).exists(),
+                "Le fichier image {} est introuvable.",
+                image_path
+            );
+
+            // Charger l'image et obtenir ses dimensions
+            let target = ImageReader::open(image_path)
+                .expect("Impossible d'ouvrir l'image")
+                .decode()
+                .expect("Impossible de décoder l'image")
+                .into_rgb8();
+
+            let image_width = target.width();
+            let image_height = target.height();
+
+            let (expected_width, expected_height) =
+                calculate_output_dimensions(image_width, image_height, scaling, &tile_size);
+
+            // Tester la fonction `prepare_target`
+            match prepare_target(image_path, scaling, &tile_size) {
+                Ok(result) => {
+                    let result_size = Size {
+                        width: result.width(),
+                        height: result.height(),
+                    };
+                    assert_eq!(
+                        result_size.width, expected_width,
+                        "Largeur incorrecte pour {} avec scaling {}.",
+                        image_path, scaling
+                    );
+                    assert_eq!(
+                        result_size.height, expected_height,
+                        "Hauteur incorrecte pour {} avec scaling {}.",
+                        image_path, scaling
+                    );
+                }
+                Err(e) => panic!(
+                    "Erreur lors de la préparation de l'image {}: {}",
+                    image_path, e
+                ),
+            }
+        }
+    }
+
+    #[test]
+    fn unit_test_prepare_tiles() {
+        //Unit Test pour la fonction Prepare_tiles
+
+        //Set different taille de tiles
+        let tile_sizes = vec![
+            Size {
+                width: 30,
+                height: 25,
+            },
+            Size {
+                width: 40,
+                height: 40,
+            },
+            Size {
+                width: 50,
+                height: 30,
+            },
+        ];
+
+        let tiles_path = "./assets/tiles-small/"; // Chemain d'acces des tiles
+        let verbose = false; // desactive la verbose
+
+        for tile_size in tile_sizes {
+            let tiles = &prepare_tiles(tiles_path, &tile_size, verbose).unwrap();
+
+            for (i, tile) in tiles.iter().enumerate() {
+                // Test si la tile à les dimensions voulue
+                assert_eq!(
+                    tile.width(),
+                    tile_size.width,
+                    "Tile {} has incorrect width for size {:?}",
+                    i,
+                    tile_size
+                );
+                assert_eq!(
+                    tile.height(),
+                    tile_size.height,
+                    "Tile {} has incorrect height for size {:?}",
+                    i,
+                    tile_size
+                );
+            }
+        }
     }
 }

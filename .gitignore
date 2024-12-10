@@ -1,3 +1,4 @@
 /target
 rustfmt.toml
 assets/images
+.DS_Store
